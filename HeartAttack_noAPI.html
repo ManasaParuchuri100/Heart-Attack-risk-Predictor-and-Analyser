@@ -1,0 +1,1965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HeartWise Predictor Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Chart.js for all dynamic visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- 
+      *** IMPORTANT ***
+      To enable the Google Map feature on the "Connect with Doctors" tab,
+      you need to get a Google Maps JavaScript API key and replace 'YOUR_API_KEY' below.
+      You can get a key from the Google Cloud Console: https://console.cloud.google.com/google/maps-apis/overview
+    -->
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=&libraries=places"></script>
+
+    <style>
+        /* Custom colors for the theme */
+        :root {
+            --reddish: #EF4444; /* Tailwind's red-500 */
+            --teal: #2DD4BF; /* Tailwind's teal-400 */
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(to bottom right, #1F2937, #0F172A);
+            min-height: 100vh;
+            color: #f3f4f6;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        .container, .login-container {
+            background-color: rgba(31, 41, 55, 0.9); /* Dark grey */
+            backdrop-filter: blur(10px);
+        }
+        .tab-button {
+            transition: all 0.3s ease;
+            color: #ccc;
+        }
+        .tab-button.active {
+            background-color: var(--teal);
+            color: #1F2937;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            transform: translateY(-2px);
+            font-weight: 700;
+        }
+        input, select {
+            background-color: rgba(55, 65, 81, 0.7);
+            color: white;
+            border-color: rgba(75, 85, 99, 0.7);
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--teal);
+            box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.5);
+        }
+        .submit-button, .login-button {
+            background-color: var(--teal);
+            color: #1F2937;
+            transition: all 0.3s ease-in-out;
+        }
+        .submit-button:hover:not(:disabled), .login-button:hover:not(:disabled) {
+            background-color: #14B8A6; /* a slightly darker teal */
+            transform: scale(1.03);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .submit-button:disabled, .login-button:disabled {
+            background-color: #5EEAD4; /* lighter teal when disabled */
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        .result-box {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* Chart container styling for responsiveness */
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(1, minmax(0, 1fr));
+            gap: 1.5rem; /* gap-6 */
+        }
+        @media (min-width: 768px) {
+            .chart-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .comparison-chart-card {
+                grid-column: span 2; /* Full width for the comparison chart on desktop */
+            }
+        }
+        .chart-card {
+            background-color: #1F2937;
+            padding: 1rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+            border: 1px solid rgba(45, 212, 191, 0.3);
+        }
+        
+        /* Metric analysis grid */
+        .metric-analysis-grid {
+            display: grid;
+            grid-template-columns: repeat(1, minmax(0, 1fr));
+            gap: 1rem;
+        }
+        @media (min-width: 768px) {
+            .metric-analysis-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+        
+        /* Chat styling */
+        .user-message {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 0.75rem;
+        }
+        .assistant-message {
+            display: flex;
+            justify-content: flex-start;
+            margin-bottom: 0.75rem;
+        }
+        .user-bubble, .assistant-bubble {
+            padding: 0.75rem;
+            max-width: 80%;
+            word-wrap: break-word;
+            line-height: 1.4;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+        }
+
+        .user-bubble {
+            background-color: var(--teal);
+            color: #1F2937;
+            border-radius: 0.75rem 0.75rem 0 0.75rem; /* Top-right point */
+        }
+
+        .assistant-bubble {
+            background-color: #374151; /* Darker gray */
+            color: #f3f4f6;
+            border-radius: 0.75rem 0.75rem 0.75rem 0; /* Top-left point */
+        }
+
+        /* Doctor Card Styling */
+        .doctor-card {
+            background-color: #1F2937;
+            border: 1px solid rgba(45, 212, 191, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .doctor-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+        .doctor-status-available {
+            color: #2DD4BF; /* Teal */
+            background-color: rgba(45, 212, 191, 0.1);
+        }
+         .doctor-status-unavailable {
+            color: #F87171; /* Red */
+            background-color: rgba(248, 113, 113, 0.1);
+        }
+        .patient-management-button {
+            background-color: rgba(55, 65, 81, 0.7);
+            border: 1px solid rgba(75, 85, 99, 0.7);
+            transition: all 0.2s ease-in-out;
+        }
+        .patient-management-button:hover {
+            background-color: rgba(75, 85, 99, 0.9);
+            border-color: var(--teal);
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Container -->
+    <div id="login-container" class="login-container rounded-2xl shadow-2xl p-8 w-full max-w-sm">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-white drop-shadow-lg">HeartWise Predictor</h1>
+            <p class="text-gray-300 mt-2">Sign in to access your dashboard</p>
+        </header>
+        <form id="login-form">
+            <div class="mb-6">
+                 <label class="text-sm font-medium text-gray-300">Login As</label>
+                <div class="flex items-center justify-around mt-2 bg-gray-800 rounded-lg p-1">
+                    <label class="w-1/2 text-center py-2 px-4 rounded-md cursor-pointer transition-colors duration-300 text-white">
+                        <input type="radio" name="role" value="user" class="hidden" checked>
+                        <span>Regular User</span>
+                    </label>
+                    <label class="w-1/2 text-center py-2 px-4 rounded-md cursor-pointer transition-colors duration-300 text-white">
+                        <input type="radio" name="role" value="org" class="hidden">
+                        <span>Health Organization</span>
+                    </label>
+                </div>
+            </div>
+            <div class="space-y-6">
+                <div>
+                    <label for="username" class="text-sm font-medium text-gray-300">Username / Organization Name</label>
+                    <input type="text" id="username" class="w-full mt-2 rounded-lg p-3 border" placeholder="e.g., user@health.com">
+                </div>
+                <div>
+                    <label for="password" class="text-sm font-medium text-gray-300">Password</label>
+                    <input type="password" id="password" class="w-full mt-2 rounded-lg p-3 border" placeholder="••••••••">
+                </div>
+            </div>
+            <div id="login-error" class="text-red-400 text-sm text-center mt-4 h-5"></div>
+            <div class="mt-8">
+                <button type="submit" class="login-button w-full font-bold py-3 px-8 rounded-full shadow-lg">Sign In</button>
+            </div>
+        </form>
+         <div class="mt-4 text-center">
+            <button id="guest-login-button" class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-8 rounded-full shadow-lg transition-colors duration-300">Continue as Guest</button>
+        </div>
+    </div>
+
+    <!-- Main App Container -->
+    <div id="main-app-container" class="hidden container rounded-2xl shadow-2xl p-6 md:p-10 w-full max-w-6xl">
+        <header class="mb-6">
+             <div class="flex justify-end items-center mb-4">
+                <p id="welcome-message" class="text-gray-300 mr-auto font-semibold"></p>
+                <select id="language-select" class="bg-gray-700 text-white rounded-lg px-3 py-1 text-sm md:text-base cursor-pointer">
+                    <option value="en">English</option>
+                    <option value="hi">Hindi</option>
+                </select>
+                <button id="signout-button" class="ml-4 bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded-lg text-sm md:text-base transition-colors duration-300">Sign Out</button>
+            </div>
+            <div class="text-center">
+                <h1 class="text-3xl md:text-5xl font-bold text-white drop-shadow-lg">HeartWise Predictor</h1>
+                <p class="text-gray-300">Your health, our priority.</p>
+            </div>
+        </header>
+
+        <!-- Patient Management Bar (for Health Organizations) -->
+        <div id="patient-management-bar" class="hidden bg-gray-800 p-4 rounded-xl mb-6 flex flex-col sm:flex-row items-center gap-4 flex-wrap">
+            <label for="patient-select" class="text-white font-semibold flex-shrink-0">Viewing Patient:</label>
+            <select id="patient-select" class="flex-grow rounded-lg p-2 border bg-gray-700 text-white"></select>
+            
+            <!-- Form to add a new patient, initially hidden -->
+            <div id="add-patient-form" class="hidden flex items-center gap-2 w-full sm:w-auto sm:flex-nowrap flex-wrap">
+                 <input type="text" id="new-patient-name" placeholder="New Patient Name" class="flex-grow rounded-lg p-2 border bg-gray-700 text-white">
+                 <button id="save-patient-button" class="bg-teal-500 hover:bg-teal-600 text-gray-900 font-bold py-2 px-3 rounded-lg">Save</button>
+                 <button id="cancel-add-patient-button" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-lg">Cancel</button>
+            </div>
+
+            <!-- Default buttons, visible initially -->
+            <div id="patient-buttons" class="flex items-center gap-2">
+                <button id="add-patient-button" class="patient-management-button text-white font-bold py-2 px-4 rounded-lg">Add Patient</button>
+                <button id="delete-patient-button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Delete Patient</button>
+            </div>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="flex justify-center mb-6 overflow-x-auto">
+            <button id="tab-predictor" class="tab-button active px-4 py-2 mx-1 rounded-full text-sm md:text-base font-semibold">Predictor</button>
+            <button id="tab-health-analysis" class="tab-button px-4 py-2 mx-1 rounded-full text-sm md:text-base font-semibold">Health Analysis</button>
+            <button id="tab-suggestions" class="tab-button px-4 py-2 mx-1 rounded-full text-sm md:text-base font-semibold">Suggestions</button>
+            <button id="tab-assistant" class="tab-button px-4 py-2 mx-1 rounded-full text-sm md:text-base font-semibold">Health Assistant</button>
+            <button id="tab-doctors" class="tab-button px-4 py-2 mx-1 rounded-full text-sm md:text-base font-semibold">Connect with Doctors</button>
+        </div>
+
+        <!-- Tab Content: Predictor (Input Form) -->
+        <div id="content-predictor" class="tab-content">
+            <p class="text-center text-gray-300 mb-6" id="predictor-intro">Enter your health data below to get an estimated heart attack risk score. Please fill out all fields accurately.</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Input fields with labels -->
+                <div class="flex flex-col">
+                    <div class="flex items-center space-x-2 mb-1">
+                        <label for="age" id="label-age" class="text-gray-300 text-sm md:text-base">Age</label>
+                        <div class="relative group">
+                            <!-- Info Icon SVG -->
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <!-- Tooltip -->
+                            <div class="absolute bottom-full mb-2 w-72 bg-gray-800 text-white text-xs rounded-lg p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10 transform -translate-x-1/2 left-1/2 shadow-lg">
+                                Your age in years. Older age is a significant risk factor for heart disease.
+                                <div class="absolute w-2 h-2 bg-gray-800 transform rotate-45 top-full -mt-1 left-1/2 -translate-x-1/2"></div> <!-- Arrow -->
+                            </div>
+                        </div>
+                    </div>
+                    <input type="number" id="age" min="0" class="rounded-lg p-2 md:p-3 border">
+                </div>
+                <div class="flex flex-col">
+                    <div class="flex items-center space-x-2 mb-1">
+                        <label for="sex" id="label-sex" class="text-gray-300 text-sm md:text-base">Sex</label>
+                        <div class="relative group">
+                            <!-- Info Icon SVG -->
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <!-- Tooltip -->
+                            <div class="absolute bottom-full mb-2 w-72 bg-gray-800 text-white text-xs rounded-lg p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10 transform -translate-x-1/2 left-1/2 shadow-lg">
+                                Biological sex. Men are generally at a higher risk of heart attack than pre-menopausal women.
+                                <div class="absolute w-2 h-2 bg-gray-800 transform rotate-45 top-full -mt-1 left-1/2 -translate-x-1/2"></div> <!-- Arrow -->
+                            </div>
+                        </div>
+                    </div>
+                    <select id="sex" class="rounded-lg p-2 md:p-3 border">
+                        <option value="1" id="sex-option-male">Male</option>
+                        <option value="0" id="sex-option-female">Female</option>
+                    </select>
+                </div>
+                <div class="flex flex-col">
+                    <div class="flex items-center space-x-2 mb-1">
+                        <label for="cp" id="label-cp" class="text-gray-300 text-sm md:text-base">Chest Pain Type</label>
+                        <div class="relative group">
+                            <!-- Info Icon SVG -->
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <!-- Tooltip -->
+                            <div class="absolute bottom-full mb-2 w-72 bg-gray-800 text-white text-xs rounded-lg p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10 transform -translate-x-1/2 left-1/2 shadow-lg">
+                                Describes the nature of the chest pain. The type is a key indicator:
+                                <ul class="list-disc list-inside mt-2 space-y-1">
+                                    <li><strong class="text-teal-300">Typical Angina:</strong> Classic heart-related chest pain.</li>
+                                    <li><strong class="text-teal-300">Atypical Angina:</strong> Less common symptoms of heart pain.</li>
+                                    <li><strong class="text-teal-300">Non-anginal Pain:</strong> Pain not related to the heart.</li>
+                                    <li><strong class="text-teal-300">Asymptomatic:</strong> No chest pain experienced.</li>
+                                </ul>
+                                <div class="absolute w-2 h-2 bg-gray-800 transform rotate-45 top-full -mt-1 left-1/2 -translate-x-1/2"></div> <!-- Arrow -->
+                            </div>
+                        </div>
+                    </div>
+                    <select id="cp" class="rounded-lg p-2 md:p-3 border">
+                        <option value="0" id="cp-option-0">Typical Angina</option>
+                        <option value="1" id="cp-option-1">Atypical Angina</option>
+                        <option value="2" id="cp-option-2">Non-anginal Pain</option>
+                        <option value="3" id="cp-option-3">Asymptomatic</option>
+                    </select>
+                </div>
+                <div class="flex flex-col">
+                    <div class="flex items-center space-x-2 mb-1">
+                        <label for="trtbps" id="label-trtbps" class="text-gray-300 text-sm md:text-base">Resting Systolic BP (trtbps - mmHg)</label>
+                        <div class="relative group">
+                            <!-- Info Icon SVG -->
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <!-- Tooltip -->
+                            <div class="absolute bottom-full mb-2 w-72 bg-gray-800 text-white text-xs rounded-lg p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10 transform -translate-x-1/2 left-1/2 shadow-lg">
+                                The top number in a blood pressure reading, measured at rest. <br>
+                                <strong class='text-green-300'>Normal:</strong> &lt;120 mmHg <br>
+                                <strong class='text-yellow-300'>Elevated:</strong> 120-129 mmHg <br>
+                                <strong class='text-red-300'>High:</strong> ≥130 mmHg
+                                <div class="absolute w-2 h-2 bg-gray-800 transform rotate-45 top-full -mt-1 left-1/2 -translate-x-1/2"></div> <!-- Arrow -->
+                            </div>
+                        </div>
+                    </div>
+                    <input type="number" id="trtbps" min="0" class="rounded-lg p-2 md:p-3 border">
+                </div>
+                <div class="flex flex-col">
+                    <div class="flex items-center space-x-2 mb-1">
+                        <label for="chol" id="label-chol" class="text-gray-300 text-sm md:text-base">Cholesterol (chol - mg/dl)</label>
+                        <div class="relative group">
+                            <!-- Info Icon SVG -->
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <!-- Tooltip -->
+                            <div class="absolute bottom-full mb-2 w-72 bg-gray-800 text-white text-xs rounded-lg p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10 transform -translate-x-1/2 left-1/2 shadow-lg">
+                                Total cholesterol level in the blood. <br>
+                                <strong class='text-green-300'>Desirable:</strong> &lt;200 mg/dl <br>
+                                <strong class='text-yellow-300'>Borderline High:</strong> 200-239 mg/dl <br>
+                                <strong class='text-red-300'>High:</strong> ≥240 mg/dl
+                                <div class="absolute w-2 h-2 bg-gray-800 transform rotate-45 top-full -mt-1 left-1/2 -translate-x-1/2"></div> <!-- Arrow -->
+                            </div>
+                        </div>
+                    </div>
+                    <input type="number" id="chol" min="0" class="rounded-lg p-2 md:p-3 border">
+                </div>
+                <div class="flex flex-col">
+                    <div class="flex items-center space-x-2 mb-1">
+                        <label for="fbs" id="label-fbs" class="text-gray-300 text-sm md:text-base">Fasting Blood Sugar > 120 mg/dl</label>
+                        <div class="relative group">
+                            <!-- Info Icon SVG -->
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <!-- Tooltip -->
+                            <div class="absolute bottom-full mb-2 w-72 bg-gray-800 text-white text-xs rounded-lg p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10 transform -translate-x-1/2 left-1/2 shadow-lg">
+                                Indicates if your blood sugar is high after an overnight fast. High levels can indicate a risk for diabetes, a major contributor to heart disease. 'No' (≤120 mg/dl) is the healthy response.
+                                <div class="absolute w-2 h-2 bg-gray-800 transform rotate-45 top-full -mt-1 left-1/2 -translate-x-1/2"></div> <!-- Arrow -->
+                            </div>
+                        </div>
+                    </div>
+                    <select id="fbs" class="rounded-lg p-2 md:p-3 border">
+                        <option value="1" id="fbs-option-yes">Yes</option>
+                        <option value="0" id="fbs-option-no">No</option>
+                    </select>
+                </div>
+                <div class="flex flex-col">
+                    <div class="flex items-center space-x-2 mb-1">
+                        <label for="restecg" id="label-restecg" class="text-gray-300 text-sm md:text-base">Resting ECG Results</label>
+                        <div class="relative group">
+                            <!-- Info Icon SVG -->
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <!-- Tooltip -->
+                            <div class="absolute bottom-full mb-2 w-72 bg-gray-800 text-white text-xs rounded-lg p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10 transform -translate-x-1/2 left-1/2 shadow-lg">
+                                Results from an electrocardiogram at rest. 'Normal' is ideal. Abnormalities can indicate previous heart damage or thickening of the heart muscle (hypertrophy).
+                                <div class="absolute w-2 h-2 bg-gray-800 transform rotate-45 top-full -mt-1 left-1/2 -translate-x-1/2"></div> <!-- Arrow -->
+                            </div>
+                        </div>
+                    </div>
+                    <select id="restecg" class="rounded-lg p-2 md:p-3 border">
+                        <option value="0" id="restecg-option-0">Normal</option>
+                        <option value="1" id="restecg-option-1">ST-T Wave Abnormality</option>
+                        <option value="2" id="restecg-option-2">Left Ventricular Hypertrophy</option>
+                    </select>
+                </div>
+                <div class="flex flex-col">
+                    <div class="flex items-center space-x-2 mb-1">
+                        <label for="thalachh" id="label-thalachh" class="text-gray-300 text-sm md:text-base">Max Heart Rate Achieved (thalachh - bpm)</label>
+                        <div class="relative group">
+                            <!-- Info Icon SVG -->
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <!-- Tooltip -->
+                            <div class="absolute bottom-full mb-2 w-72 bg-gray-800 text-white text-xs rounded-lg p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10 transform -translate-x-1/2 left-1/2 shadow-lg">
+                                The highest heart rate you achieved during an exercise stress test. A lower maximum heart rate can indicate heart problems. Expected max is roughly 220 minus your age.
+                                <div class="absolute w-2 h-2 bg-gray-800 transform rotate-45 top-full -mt-1 left-1/2 -translate-x-1/2"></div> <!-- Arrow -->
+                            </div>
+                        </div>
+                    </div>
+                    <input type="number" id="thalachh" min="0" class="rounded-lg p-2 md:p-3 border">
+                </div>
+                <div class="flex flex-col">
+                    <div class="flex items-center space-x-2 mb-1">
+                        <label for="exng" id="label-exng" class="text-gray-300 text-sm md:text-base">Exercise Induced Angina</label>
+                        <div class="relative group">
+                            <!-- Info Icon SVG -->
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <!-- Tooltip -->
+                            <div class="absolute bottom-full mb-2 w-72 bg-gray-800 text-white text-xs rounded-lg p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10 transform -translate-x-1/2 left-1/2 shadow-lg">
+                                Whether or not you experience chest pain (angina) during exercise. 'No' is the healthy response. 'Yes' strongly suggests coronary artery disease.
+                                <div class="absolute w-2 h-2 bg-gray-800 transform rotate-45 top-full -mt-1 left-1/2 -translate-x-1/2"></div> <!-- Arrow -->
+                            </div>
+                        </div>
+                    </div>
+                    <select id="exng" class="rounded-lg p-2 md:p-3 border">
+                        <option value="1" id="exng-option-yes">Yes</option>
+                        <option value="0" id="exng-option-no">No</option>
+                    </select>
+                </div>
+                <div class="flex flex-col">
+                    <div class="flex items-center space-x-2 mb-1">
+                        <label for="caa" id="label-caa" class="text-gray-300 text-sm md:text-base">Major Vessels not Colored (caa)</label>
+                        <div class="relative group">
+                            <!-- Info Icon SVG -->
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <!-- Tooltip -->
+                            <div class="absolute bottom-full mb-2 w-72 bg-gray-800 text-white text-xs rounded-lg p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10 transform -translate-x-1/2 left-1/2 shadow-lg">
+                                The number of major coronary arteries (0-4) that appear blocked during a fluoroscopy test. More blocked vessels indicate higher risk. This is an advanced test; a value of 0 is a safe default if this information is unknown.
+                                <div class="absolute w-2 h-2 bg-gray-800 transform rotate-45 top-full -mt-1 left-1/2 -translate-x-1/2"></div> <!-- Arrow -->
+                            </div>
+                        </div>
+                    </div>
+                    <select id="caa" class="rounded-lg p-2 md:p-3 border">
+                        <option value="0">0</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mt-8 text-center">
+                <button id="clear-history-button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-full shadow-lg transition-all duration-300">Clear Patient History</button>
+            </div>
+        </div>
+
+        <!-- Tab Content: Suggestions -->
+        <div id="content-suggestions" class="tab-content hidden">
+            <h2 class="text-2xl md:text-3xl font-bold mb-4" id="suggestions-heading">Health Suggestions</h2>
+            <ul class="list-disc list-inside space-y-4" id="suggestions-list"></ul>
+        </div>
+
+        <!-- Tab Content: Health Assistant (Chatbot) -->
+        <div id="content-assistant" class="tab-content hidden">
+            <h2 class="text-2xl md:text-3xl font-bold mb-4" id="assistant-heading">Virtual Health Assistant</h2>
+            <p class="text-gray-300 mb-4" id="assistant-text">Ask me a question about heart health, diet, or lifestyle. I'm connected to the internet to provide grounded, detailed answers!</p>
+            
+            <div id="chat-container" class="mb-4 h-96 overflow-y-auto rounded-xl p-4 bg-gray-700/50">
+                <!-- Chat messages will be appended here -->
+            </div>
+
+            <div class="flex space-x-2">
+                <input type="text" id="chat-input" placeholder="Ask a question about heart health..." class="flex-grow rounded-lg p-3 border border-gray-600 focus:ring-teal-400">
+                <button id="send-button" class="submit-button font-bold py-3 px-6 rounded-lg shadow-md flex items-center justify-center">
+                    <!-- Send Icon -->
+                    <svg id="send-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A5.999 5.999 0 0112 11.218v-.492a10.038 10.038 0 00-4.04-7.857L6 12zM6 12l-2.731 8.874A5.999 5.999 0 0012 12.782v.492a10.038 10.038 0 004.04 7.857L6 12zM6 12h.001M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <!-- Loading Spinner -->
+                    <svg id="loading-spinner" class="animate-spin h-6 w-6 text-gray-900 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Tab Content: Connect with Doctors -->
+        <div id="content-doctors" class="tab-content hidden">
+            <h2 class="text-2xl md:text-3xl font-bold mb-4" id="doctors-heading">Connect with Specialists</h2>
+            <p class="text-gray-300 mb-6" id="doctors-intro">Find and connect with top-rated cardiologists and health experts. Book an appointment or send a message directly.</p>
+
+            <!-- Google Map Container -->
+            <div class="relative">
+                <div id="map" class="w-full h-96 rounded-xl my-6 bg-gray-800 flex items-center justify-center text-gray-400 border-2 border-teal-500">
+                    Loading map... Please allow location access for best results.
+                </div>
+                <div id="map-overlay-message" class="absolute top-4 left-1/2 transform -translate-x-1/2 bg-red-600/90 text-white px-4 py-2 rounded-lg shadow-xl text-sm font-medium hidden transition-opacity duration-300">
+                    <!-- Message will be inserted here -->
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="doctors-list">
+                <!-- Doctor cards will be dynamically inserted here -->
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- AUTHENTICATION & UI TOGGLING ---
+        const loginContainer = document.getElementById('login-container');
+        const mainAppContainer = document.getElementById('main-app-container');
+        const loginForm = document.getElementById('login-form');
+        const guestLoginButton = document.getElementById('guest-login-button');
+        const signoutButton = document.getElementById('signout-button');
+        const loginError = document.getElementById('login-error');
+        const welcomeMessage = document.getElementById('welcome-message');
+        const patientManagementBar = document.getElementById('patient-management-bar');
+        const patientSelect = document.getElementById('patient-select');
+
+        function showApp(username, role) {
+            loginContainer.classList.add('hidden');
+            mainAppContainer.classList.remove('hidden');
+            sessionStorage.setItem('loggedInUser', username);
+            sessionStorage.setItem('userRole', role);
+
+            welcomeMessage.textContent = `Welcome, ${username}!`;
+            
+            if (role === 'org') {
+                patientManagementBar.classList.remove('hidden');
+                loadPatientsForOrg();
+            } else {
+                patientManagementBar.classList.add('hidden');
+                updateWelcomeMessage();
+            }
+            
+            updateUI('en'); // Initialize UI after showing app
+            setActiveTab('predictor');
+        }
+
+        function showLogin() {
+            mainAppContainer.classList.add('hidden');
+            loginContainer.classList.remove('hidden');
+            sessionStorage.clear();
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+            loginError.textContent = '';
+        }
+
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const role = document.querySelector('input[name="role"]:checked').value;
+
+            if (username && password) {
+                showApp(username, role);
+            } else {
+                loginError.textContent = 'Please enter both username and password.';
+            }
+        });
+
+        guestLoginButton.addEventListener('click', () => {
+            showApp('Guest', 'user');
+        });
+        
+        signoutButton.addEventListener('click', showLogin);
+
+        document.querySelectorAll('input[name="role"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                document.querySelectorAll('input[name="role"]').forEach(r => {
+                    r.parentElement.style.backgroundColor = 'transparent';
+                });
+                if (this.checked) {
+                    this.parentElement.style.backgroundColor = 'var(--teal)';
+                }
+            });
+        });
+        document.querySelector('input[name="role"][value="user"]').parentElement.style.backgroundColor = 'var(--teal)';
+
+
+        // --- PATIENT MANAGEMENT LOGIC (for Health Orgs) ---
+        const addPatientButton = document.getElementById('add-patient-button');
+        const deletePatientButton = document.getElementById('delete-patient-button');
+        const patientButtons = document.getElementById('patient-buttons');
+        const addPatientForm = document.getElementById('add-patient-form');
+        const newPatientNameInput = document.getElementById('new-patient-name');
+        const savePatientButton = document.getElementById('save-patient-button');
+        const cancelAddPatientButton = document.getElementById('cancel-add-patient-button');
+
+        function getCurrentPatientId() {
+            const role = sessionStorage.getItem('userRole');
+            if (role === 'org') {
+                // Return null if no patient is selected or the placeholder is selected
+                if (patientSelect.options.length === 0 || patientSelect.options[patientSelect.selectedIndex]?.disabled) {
+                    return null;
+                }
+                return patientSelect.value;
+            }
+            return sessionStorage.getItem('loggedInUser') || 'guest_user';
+        }
+        
+        function updateWelcomeMessage() {
+             const role = sessionStorage.getItem('userRole');
+             const username = sessionStorage.getItem('loggedInUser');
+             if (role === 'org') {
+                const patientId = getCurrentPatientId();
+                const patientName = patientId ? patientSelect.options[patientSelect.selectedIndex].text : 'No Patient Selected';
+                welcomeMessage.textContent = `Org: ${username} | Patient: ${patientName}`;
+             } else {
+                welcomeMessage.textContent = `Welcome, ${username}!`;
+             }
+        }
+
+        function loadPatientsForOrg() {
+            const orgName = sessionStorage.getItem('loggedInUser');
+            let patients = JSON.parse(localStorage.getItem(`patients_${orgName}`)) || [];
+            const currentVal = patientSelect.value;
+            patientSelect.innerHTML = '';
+
+            if (patients.length === 0) {
+                 const option = document.createElement('option');
+                 option.textContent = "No patients found. Please add one.";
+                 option.disabled = true;
+                 patientSelect.appendChild(option);
+            } else {
+                patients.forEach(patientId => {
+                    const option = document.createElement('option');
+                    option.value = patientId;
+                    option.textContent = patientId;
+                    patientSelect.appendChild(option);
+                });
+                // try to reselect the previously selected patient
+                if (patients.includes(currentVal)) {
+                    patientSelect.value = currentVal;
+                }
+            }
+            switchPatient();
+        }
+
+        function saveNewPatient() {
+            const orgName = sessionStorage.getItem('loggedInUser');
+            const newPatientName = newPatientNameInput.value.trim();
+            newPatientNameInput.style.borderColor = ''; // reset border
+
+            if (newPatientName) {
+                let patients = JSON.parse(localStorage.getItem(`patients_${orgName}`)) || [];
+                if (!patients.includes(newPatientName)) {
+                    patients.push(newPatientName);
+                    localStorage.setItem(`patients_${orgName}`, JSON.stringify(patients));
+                    
+                    // Reset UI
+                    addPatientForm.classList.add('hidden');
+                    patientButtons.classList.remove('hidden');
+                    newPatientNameInput.value = '';
+
+                    loadPatientsForOrg(); // Reload the list
+                    patientSelect.value = newPatientName; // Select the new patient
+                    switchPatient(); // Update the view
+                } else {
+                    console.error("A patient with this name already exists.");
+                    newPatientNameInput.style.borderColor = 'red'; // visual feedback
+                }
+            }
+        }
+        
+        function deletePatient() {
+            const orgName = sessionStorage.getItem('loggedInUser');
+            const patientIdToDelete = getCurrentPatientId();
+
+            if (!patientIdToDelete) {
+                console.warn("No patient selected to delete.");
+                return;
+            }
+            
+            // Since confirm() is not available, we proceed directly.
+            // In a real app, a custom modal confirmation would be here.
+            
+            // Remove from patient list
+            let patients = JSON.parse(localStorage.getItem(`patients_${orgName}`)) || [];
+            patients = patients.filter(p => p !== patientIdToDelete);
+            localStorage.setItem(`patients_${orgName}`, JSON.stringify(patients));
+
+            // Remove patient's risk history
+            localStorage.removeItem(`riskHistory_${patientIdToDelete}`);
+            
+            loadPatientsForOrg(); // This will refresh the dropdown and trigger switchPatient()
+        }
+
+        function switchPatient() {
+            // Clear all form fields
+            const inputs = document.querySelectorAll('#content-predictor input, #content-predictor select');
+            inputs.forEach(input => {
+                if (input.type === 'number') input.value = '';
+                else input.selectedIndex = 0;
+            });
+
+            // Hide the result box and error messages
+            document.getElementById('result-box').classList.add('hidden');
+            document.getElementById('error-message').classList.add('hidden');
+
+            // Clear suggestions list
+            document.getElementById('suggestions-list').innerHTML = '';
+            
+            // Re-render the analysis tab for the new patient
+            renderHealthAnalysisTab();
+            updateWelcomeMessage();
+        }
+        
+        addPatientButton.addEventListener('click', () => {
+            patientButtons.classList.add('hidden');
+            addPatientForm.classList.remove('hidden');
+            newPatientNameInput.focus();
+        });
+
+        cancelAddPatientButton.addEventListener('click', () => {
+            addPatientForm.classList.add('hidden');
+            patientButtons.classList.remove('hidden');
+            newPatientNameInput.value = '';
+            newPatientNameInput.style.borderColor = ''; // reset border
+        });
+
+        savePatientButton.addEventListener('click', saveNewPatient);
+        deletePatientButton.addEventListener('click', deletePatient);
+        patientSelect.addEventListener('change', switchPatient);
+
+
+        // --- GOOGLE MAPS API LOGIC ---
+        let map;
+        let service;
+        let infowindow;
+        let isMapInitialized = false;
+
+        // This function is the callback for the Google Maps script tag
+        function initMap() {
+            // Default location (Pune, India) if geolocation fails
+            const pune = new google.maps.LatLng(18.5204, 73.8567);
+            const mapOverlay = document.getElementById('map-overlay-message');
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const userLocation = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude,
+                        };
+                        createMapAndFindHospitals(userLocation);
+                    },
+                    () => {
+                        // User denied location, use default
+                        console.warn("User denied geolocation. Defaulting to Pune.");
+                        createMapAndFindHospitals(pune);
+                        mapOverlay.textContent = 'Could not access your location. Showing results for Pune, India.';
+                        mapOverlay.classList.remove('hidden');
+                        setTimeout(() => { mapOverlay.classList.add('hidden'); }, 5000);
+                    }
+                );
+            } else {
+                // Browser doesn't support Geolocation
+                console.error("Browser doesn't support geolocation.");
+                createMapAndFindHospitals(pune);
+                mapOverlay.textContent = 'Geolocation is not supported by this browser. Showing results for Pune, India.';
+                mapOverlay.classList.remove('hidden');
+                setTimeout(() => { mapOverlay.classList.add('hidden'); }, 5000);
+            }
+        }
+
+        function createMapAndFindHospitals(location) {
+            const mapElement = document.getElementById("map");
+            if (!mapElement) return; // Don't run if map element isn't visible yet
+            mapElement.textContent = ''; // Clear loading text
+
+            infowindow = new google.maps.InfoWindow();
+            map = new google.maps.Map(mapElement, {
+                center: location,
+                zoom: 13,
+                styles: [ // Custom dark theme for the map
+                    { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+                    { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
+                    { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+                    {
+                        featureType: "administrative.locality",
+                        elementType: "labels.text.fill",
+                        stylers: [{ color: "#d59563" }],
+                    },
+                    {
+                        featureType: "poi",
+                        elementType: "labels.text.fill",
+                        stylers: [{ color: "#d59563" }],
+                    },
+                    {
+                        featureType: "poi.park",
+                        elementType: "geometry",
+                        stylers: [{ color: "#263c3f" }],
+                    },
+                    {
+                        featureType: "poi.park",
+                        elementType: "labels.text.fill",
+                        stylers: [{ color: "#6b9a76" }],
+                    },
+                    {
+                        featureType: "road",
+                        elementType: "geometry",
+                        stylers: [{ color: "#38414e" }],
+                    },
+                    {
+                        featureType: "road",
+                        elementType: "geometry.stroke",
+                        stylers: [{ color: "#212a37" }],
+                    },
+                    {
+                        featureType: "road",
+                        elementType: "labels.text.fill",
+                        stylers: [{ color: "#9ca5b3" }],
+                    },
+                    {
+                        featureType: "road.highway",
+                        elementType: "geometry",
+                        stylers: [{ color: "#746855" }],
+                    },
+                    {
+                        featureType: "road.highway",
+                        elementType: "geometry.stroke",
+                        stylers: [{ color: "#1f2835" }],
+                    },
+                    {
+                        featureType: "road.highway",
+                        elementType: "labels.text.fill",
+                        stylers: [{ color: "#f3d19c" }],
+                    },
+                    {
+                        featureType: "transit",
+                        elementType: "geometry",
+                        stylers: [{ color: "#2f3948" }],
+                    },
+                    {
+                        featureType: "transit.station",
+                        elementType: "labels.text.fill",
+                        stylers: [{ color: "#d59563" }],
+                    },
+                    {
+                        featureType: "water",
+                        elementType: "geometry",
+                        stylers: [{ color: "#17263c" }],
+                    },
+                    {
+                        featureType: "water",
+                        elementType: "labels.text.fill",
+                        stylers: [{ color: "#515c6d" }],
+                    },
+                    {
+                        featureType: "water",
+                        elementType: "labels.text.stroke",
+                        stylers: [{ color: "#17263c" }],
+                    },
+                ],
+            });
+
+            // Add a marker for the user's location
+            new google.maps.Marker({
+                position: location,
+                map: map,
+                title: "Your Location",
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 8,
+                    fillColor: "#4285F4",
+                    fillOpacity: 1,
+                    strokeColor: "white",
+                    strokeWeight: 2,
+                },
+            });
+
+            const request = {
+                location: location,
+                radius: "5000", // 5km radius
+                type: ["hospital"],
+            };
+
+            service = new google.maps.places.PlacesService(map);
+            service.nearbySearch(request, (results, status) => {
+                if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+                    for (let i = 0; i < results.length; i++) {
+                        createMarker(results[i]);
+                    }
+                } else {
+                    console.error("PlacesService failed:", status);
+                }
+            });
+        }
+
+        function createMarker(place) {
+            if (!place.geometry || !place.geometry.location) return;
+
+            const marker = new google.maps.Marker({
+                map,
+                position: place.geometry.location,
+                title: place.name,
+            });
+
+            google.maps.event.addListener(marker, "click", () => {
+                infowindow.setContent(`<div><strong>${place.name}</strong><br>${place.vicinity}</div>`);
+                infowindow.open(map, marker);
+            });
+        }
+
+
+        // --- GEMINI API CONSTANTS AND SETUP ---
+        const MAX_RETRIES = 5;
+        // API Key is intentionally left blank for the environment to inject
+        const apiKey = "";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+        // Get System Instruction based on selected language
+        function getSystemInstruction(lang) {
+            if (lang === 'hi') {
+                return "आप एक विशेषज्ञ स्वास्थ्य सहायक हैं। हृदय स्वास्थ्य, कोलेस्ट्रॉल, रक्तचाप और स्वस्थ जीवनशैली के बारे में सटीक, संक्षिप्त और सहायक जानकारी हिंदी में प्रदान करें। आप इंटरनेट एक्सेस (Google Search) का उपयोग करके जानकारी को प्रमाणित कर सकते हैं। कभी भी व्यक्तिगत चिकित्सा सलाह, निदान, या उपचार न दें। हमेशा उपयोगकर्ता को डॉक्टर से परामर्श करने की सलाह दें।";
+            }
+            // Default to English
+            return "You are an expert health assistant focused on cardiovascular health, cholesterol, blood pressure, and healthy lifestyle choices. Provide accurate, concise, and helpful information. You can use internet access (Google Search) to ground the information. Never provide personal medical advice, diagnosis, or treatment. Always advise the user to consult a doctor.";
+        }
+        
+        // --- TRANSLATION AND MODEL DATA ---
+        
+        const translations = {
+            en: {
+                appName: "HeartWise Predictor",
+                predictorTab: "Predictor",
+                analysisTab: "Health Analysis",
+                suggestionsTab: "Suggestions",
+                assistantTab: "Health Assistant", 
+                doctorsTab: "Connect with Doctors",
+                predictorIntro: "Enter your health data below to get an estimated heart attack risk score. Please fill out all fields accurately.",
+                labelAge: "Age",
+                labelSex: "Sex",
+                labelCp: "Chest Pain Type",
+                labelTrtbps: "Resting Systolic BP (trtbps - mmHg)",
+                labelChol: "Cholesterol (chol - mg/dl)",
+                labelFbs: "Fasting Blood Sugar > 120 mg/dl",
+                labelRestecg: "Resting ECG Results",
+                labelThalachh: "Max Heart Rate Achieved (thalachh - bpm)",
+                labelExng: "Exercise Induced Angina",
+                labelCaa: "Major Vessels not Colored (caa)",
+                predictButton: "Predict Risk",
+                resultHigh: "High Risk",
+                resultLow: "Low Risk",
+                resultText: "Based on the provided data, the estimated probability of a heart attack is: ",
+                disclaimerText: "Disclaimer: This is a predictive tool and should not replace professional medical advice. Consult a healthcare provider for a proper diagnosis.",
+                suggestionsHeading: "Health Suggestions",
+                suggestionsHighRisk: [
+                    "Consult a cardiologist immediately for a professional evaluation.",
+                    "Adopt a very low-fat, high-fiber diet.",
+                    "Follow your doctor's recommendations for medication and treatment.",
+                    "Avoid all smoking and limit alcohol consumption.",
+                    "Engage in light physical activity only after consulting your doctor."
+                ],
+                suggestionsLowRisk: [
+                    "Maintain a healthy diet rich in fruits, vegetables, and whole grains.",
+                    "Engage in regular physical activity for at least 30 minutes a day.",
+                    "Manage stress through relaxation techniques like meditation or yoga.",
+                    "Limit alcohol consumption and avoid smoking.",
+                    "Monitor your blood pressure and cholesterol levels regularly."
+                ],
+                analysisHeading: "Your Health Analysis & Trends",
+                analysisIntro: "Review your health metrics and risk trend over time. Compare your values against healthy targets.",
+                summaryTitle: "Overall Risk Summary",
+                analysisNoData: "Please make a prediction first to generate a personalized health analysis.",
+                
+                // Chart Titles
+                chartComparisonTitle: "Key Metric Comparison: User vs. Target",
+                chartRiskTitle: "Heart Attack Risk Trend (%) vs. Population Average (25%)",
+                
+                clearHistoryButton: "Clear Patient History",
+                riskScoreLabel: "Your Risk Score",
+                avgLabel: "Target/Average",
+                
+                // Bar Chart Metric Labels
+                barCholesterol: "Cholesterol (mg/dl)",
+                barRestingBP: "Resting BP (mmHg)",
+                barMaxHR: "Max Heart Rate (bpm)",
+
+                // Detailed Metric Analysis Titles
+                metricsAnalysisTitle: "Key Metric Status (Latest Check)",
+                
+                // Trend Descriptions
+                trendIncreasing: "Increasing",
+                trendDecreasing: "Decreasing",
+                trendStable: "Stable",
+                trendInsufficient: "Insufficient Data",
+                
+                // Metric Statuses
+                statusOptimal: "Optimal",
+                statusElevated: "Elevated",
+                statusHighRisk: "High Risk",
+                fbsYes: "Yes (> 120 mg/dl)",
+                fbsNo: "No (≤ 120 mg/dl)",
+
+                // Metric Analysis Text
+                analysisCholHighRisk: "Cholesterol is very high. Immediate medical consultation is essential for dietary and medication management.",
+                analysisCholElevated: "Your cholesterol is **elevated**. Focus on reducing saturated fats and increasing soluble fiber intake. Regular monitoring is key.",
+                analysisCholOptimal: "Your cholesterol is within the **healthy range**. Maintain your current diet and exercise habits.",
+                analysisBPHighRisk: "Resting BP is significantly elevated. This indicates **Hypertension Stage 2** or higher. Consult a doctor immediately.",
+                analysisBPElevated: "Resting BP is **elevated** (Pre-hypertension). Focus on lifestyle changes like reducing sodium and increasing potassium.",
+                analysisBPOptimal: "Resting BP is **optimal**. Continue stress management and healthy lifestyle practices.",
+                analysisFbsHigh: "High Fasting Blood Sugar is a risk factor for diabetes and heart disease. Consult your doctor for an HBA1C test.",
+                analysisFbsNormal: "Fasting Blood Sugar is **normal** (below 120 mg/dl). Continue monitoring.",
+                analysisRestecgNormal: "Resting ECG shows **normal** findings. Keep up with routine check-ups.",
+                analysisRestecgAbnormal: "Resting ECG shows an **abnormality** (ST-T or LVH). Requires follow-up with a cardiologist.",
+
+                // Assistant Text
+                assistantHeading: "Virtual Health Assistant",
+                assistantText: "Ask me a question about heart health, diet, or lifestyle. I'm connected to the internet to provide grounded, detailed answers!",
+                assistantGreeting: "Hello! I'm your **Gemini Health Assistant**. Ask me anything about cardiovascular health, diet, or fitness!",
+                assistantApiError: "I'm sorry, I'm having trouble connecting to the health knowledge base right now. Please try your question again.",
+
+                // XAI STRINGS
+                xaiHeading: "Risk Breakdown (XAI)",
+                xaiIntro: "This is why the model predicted your risk. The factors below had the greatest influence on the result:",
+                xaiRiskIncreased: "Your risk was **increased** most by:",
+                xaiRiskDecreased: "Your risk was **reduced** most by:",
+                xaiNoMajorFactors: "No single factor significantly impacted the outcome (or data was insufficient for explanation).",
+                featureNames: {
+                    0: "Age", 1: "Sex (Male)", 2: "Chest Pain Type", 3: "Resting Blood Pressure", 
+                    4: "Cholesterol", 5: "High Fasting Blood Sugar", 6: "Abnormal Resting ECG", 
+                    7: "Max Heart Rate Achieved", 8: "Exercise Induced Angina", 9: "Major Vessels Blocked (caa)",
+                },
+                // Doctors Tab
+                doctorsHeading: "Connect with Specialists",
+                doctorsIntro: "Find and connect with top-rated cardiologists and health experts. Book an appointment or send a message directly.",
+                bookAppointment: "Book Appointment",
+                sendMessage: "Message",
+                statusAvailable: "Available",
+                statusUnavailable: "Unavailable",
+                doctor1: {
+                    name: "Dr. Anjali Sharma",
+                    specialty: "Cardiologist",
+                    bio: "With over 15 years of experience in interventional cardiology, Dr. Sharma is a leading expert in heart health management."
+                },
+                doctor2: {
+                    name: "Dr. Rahul Verma",
+                    specialty: "Nutritionist",
+                    bio: "Dr. Verma specializes in creating heart-healthy diet plans tailored to individual needs and medical conditions."
+                },
+            },
+            hi: {
+                appName: "हार्टवाइज प्रेडिक्टर",
+                predictorTab: "प्रेडिक्टर",
+                analysisTab: "स्वास्थ्य विश्लेषण",
+                suggestionsTab: "सुझाव",
+                assistantTab: "स्वास्थ्य सहायक",
+                doctorsTab: "डॉक्टरों से जुड़ें",
+                predictorIntro: "हार्ट अटैक के जोखिम का अनुमानित स्कोर प्राप्त करने के लिए नीचे अपना स्वास्थ्य डेटा दर्ज करें। कृपया सभी फ़ील्ड सही ढंग से भरें।",
+                labelAge: "उम्र",
+                labelSex: "लिंग",
+                labelCp: "सीने में दर्द का प्रकार",
+                labelTrtbps: "आराम के समय सिस्टोलिक बीपी (mmHg)",
+                labelChol: "कोलेस्ट्रॉल (mg/dl)",
+                labelFbs: "खाली पेट रक्त शर्करा > 120 mg/dl",
+                labelRestecg: "आराम ईसीजी परिणाम",
+                labelThalachh: "अधिकतम हृदय गति प्राप्त की (bpm)",
+                labelExng: "व्यायाम-प्रेरित एनजाइना",
+                labelCaa: "प्रमुख वाहिकाएं अवरुद्ध (caa)",
+                predictButton: "जोखिम का अनुमान लगाएं",
+                resultHigh: "उच्च जोखिम",
+                resultLow: "कम जोखिम",
+                resultText: "दिए गए डेटा के आधार पर, हार्ट अटैक की अनुमानित संभावना है: ",
+                disclaimerText: "अस्वीकरण: यह एक पूर्वानुमानित उपकरण है और इसे पेशेवर चिकित्सा सलाह का स्थान नहीं लेना चाहिए। उचित निदान के लिए एक स्वास्थ्य सेवा प्रदाता से परामर्श करें।",
+                suggestionsHeading: "स्वास्थ्य सुझाव",
+                suggestionsHighRisk: [
+                    "तत्काल पेशेवर मूल्यांकन के लिए हृदय रोग विशेषज्ञ से परामर्श लें।",
+                    "बहुत कम वसा, उच्च फाइबर वाला आहार अपनाएं।",
+                    "दवा और उपचार के लिए अपने डॉक्टर की सिफारिशों का पालन करें।",
+                    "सभी प्रकार के धूम्रपान से बचें और शराब का सेवन सीमित करें।",
+                    "अपने डॉक्टर से परामर्श करने के बाद ही हल्का शारीरिक व्यायाम करें।"
+                ],
+                suggestionsLowRisk: [
+                    "फल, सब्जियां और साबुत अनाज से भरपूर स्वस्थ आहार बनाए रखें।",
+                    "प्रतिदिन कम से कम 30 मिनट तक नियमित शारीरिक गतिविधि करें।",
+                    "ध्यान या योग जैसी विश्राम तकनीकों के माध्यम से तनाव को नियंत्रित करें।",
+                    "शराब का सेवन सीमित करें और धूम्रपान से बचें।",
+                    "अपने रक्तचाप और कोलेस्ट्रॉल के स्तर की नियमित रूप से निगरानी करें।"
+                ],
+                analysisHeading: "आपका स्वास्थ्य विश्लेषण और रुझान",
+                analysisIntro: "समय के साथ अपने स्वास्थ्य मेट्रिक्स और जोखिम के रुझान की समीक्षा करें। अपने मूल्यों की तुलना स्वस्थ लक्ष्यों से करें।",
+                summaryTitle: "समग्र जोखिम सारांश",
+                analysisNoData: "व्यक्तिगत स्वास्थ्य विश्लेषण उत्पन्न करने के लिए कृपया पहले एक भविष्यवाणी करें।",
+                
+                // Chart Titles
+                chartComparisonTitle: "मुख्य मीट्रिक तुलना: उपयोगकर्ता बनाम लक्ष्य",
+                chartRiskTitle: "हार्ट अटैक जोखिम रुझान (%) बनाम जनसंख्या औसत (25%)",
+                
+                clearHistoryButton: "रोगी का इतिहास साफ़ करें",
+                riskScoreLabel: "आपका जोखिम स्कोर",
+                avgLabel: "लक्ष्य/औसत",
+                
+                // Bar Chart Metric Labels
+                barCholesterol: "कोलेस्ट्रॉल (mg/dl)",
+                barRestingBP: "आराम BP (mmHg)",
+                barMaxHR: "अधिकतम HR (bpm)",
+                
+                // Detailed Metric Analysis Titles
+                metricsAnalysisTitle: "मुख्य मीट्रिक स्थिति (नवीनतम जाँच)",
+
+                // Trend Descriptions
+                trendIncreasing: "बढ़ रहा है",
+                trendDecreasing: "घट रहा है",
+                trendStable: "स्थिर",
+                trendInsufficient: "अपर्याप्त डेटा",
+                
+                // Metric Statuses
+                statusOptimal: "इष्टतम",
+                statusElevated: "बढ़ा हुआ",
+                statusHighRisk: "उच्च जोखिम",
+                fbsYes: "हाँ (> 120 mg/dl)",
+                fbsNo: "नहीं (≤ 120 mg/dl)",
+
+                // Metric Analysis Text
+                analysisCholHighRisk: "कोलेस्ट्रॉल बहुत अधिक है। आहार और दवा प्रबंधन के लिए तत्काल चिकित्सा परामर्श आवश्यक है।",
+                analysisCholElevated: "आपका कोलेस्ट्रॉल **बढ़ा हुआ** है। संतृप्त वसा कम करने और घुलनशील फाइबर सेवन बढ़ाने पर ध्यान दें। नियमित निगरानी महत्वपूर्ण है।",
+                analysisCholOptimal: "आपका कोलेस्ट्रॉल **स्वस्थ सीमा** के भीतर है। अपने वर्तमान आहार और व्यायाम की आदतों को बनाए रखें।",
+                analysisBPHighRisk: "आराम BP काफी बढ़ा हुआ है। यह **हाइपरटेंशन स्टेज 2** या उससे अधिक को इंगित करता है। तुरंत डॉक्टर से परामर्श लें।",
+                analysisBPElevated: "आराम BP **बढ़ा हुआ** है (प्री-हाइपरटेंशन)। सोडियम कम करने और पोटेशियम बढ़ाने जैसे जीवनशैली में बदलाव पर ध्यान दें।",
+                analysisBPOptimal: "आराम BP **इष्टतम** है। तनाव प्रबंधन और स्वस्थ जीवनशैली प्रथाओं को जारी रखें।",
+                analysisFbsHigh: "उच्च खाली पेट रक्त शर्करा मधुमेह और हृदय रोग के लिए एक जोखिम कारक है। HBA1C परीक्षण के लिए अपने डॉक्टर से सलाह लें।",
+                analysisFbsNormal: "खाली पेट रक्त शर्करा **सामान्य** है (120 मिलीग्राम / डीएल से नीचे)। निगरानी जारी रखें।",
+                analysisRestecgNormal: "आराम ईसीजी **सामान्य** निष्कर्ष दिखाता है। नियमित जांच जारी रखें।",
+                analysisRestecgAbnormal: "आराम ईसीजी में **असामान्यता** (एसटी-टी या एलवीएच) दिखाई देती है। हृदय रोग विशेषज्ञ से फॉलो-अप की आवश्यकता है।",
+                
+                // Assistant Text
+                assistantHeading: "वर्चुअल स्वास्थ्य सहायक",
+                assistantText: "मुझसे दिल के स्वास्थ्य, आहार या जीवनशैली के बारे में कोई भी प्रश्न पूछें। मैं आपको गूगल सर्च के माध्यम से सटीक, विस्तृत उत्तर प्रदान कर सकता हूँ!",
+                assistantGreeting: "नमस्ते! मैं आपकी **जेमिनी स्वास्थ्य सहायक** हूँ। मुझसे हृदय स्वास्थ्य, आहार, या फिटनेस के बारे में कुछ भी पूछें!",
+                assistantApiError: "क्षमा करें, मुझे अभी स्वास्थ्य ज्ञानकोश से जुड़ने में समस्या हो रही है। कृपया अपना प्रश्न पुनः प्रयास करें।",
+
+                // XAI STRINGS
+                xaiHeading: "जोखिम विवरण (XAI)",
+                xaiIntro: "यह बताता है कि मॉडल ने आपके जोखिम का अनुमान क्यों लगाया। नीचे दिए गए कारकों का परिणाम पर सबसे अधिक प्रभाव पड़ा:",
+                xaiRiskIncreased: "आपका जोखिम सबसे अधिक **बढ़ाने** वाले कारक:",
+                xaiRiskDecreased: "आपका जोखिम सबसे अधिक **कम करने** वाले कारक:",
+                xaiNoMajorFactors: "किसी भी कारक ने परिणाम को महत्वपूर्ण रूप से प्रभावित नहीं किया (या स्पष्टीकरण के लिए डेटा अपर्याप्त था)।",
+                featureNames: {
+                    0: "उम्र", 1: "लिंग (पुरुष)", 2: "छाती में दर्द का प्रकार", 3: "आराम के समय रक्तचाप", 
+                    4: "कोलेस्ट्रॉल", 5: "उच्च खाली पेट रक्त शर्करा", 6: "असामान्य आराम ईसीजी", 
+                    7: "अधिकतम हृदय गति प्राप्त की", 8: "व्यायाम-प्रेरित एनजाइना", 9: "प्रमुख वाहिकाएं अवरुद्ध (caa)",
+                },
+                // Doctors Tab
+                doctorsHeading: "विशेषज्ञों से जुड़ें",
+                doctorsIntro: "शीर्ष रेटेड हृदय रोग विशेषज्ञों और स्वास्थ्य विशेषज्ञों को ढूंढें और उनसे जुड़ें। अपॉइंटमेंट बुक करें या सीधे संदेश भेजें।",
+                bookAppointment: "अपॉइंटमेंट बुक करें",
+                sendMessage: "संदेश भेजें",
+                statusAvailable: "उपलब्ध",
+                statusUnavailable: "अनुपलब्ध",
+                 doctor1: {
+                    name: "डॉ. अंजलि शर्मा",
+                    specialty: "हृदय रोग विशेषज्ञ",
+                    bio: "इंटरवेंशनल कार्डियोलॉजी में 15 से अधिक वर्षों के अनुभव के साथ, डॉ शर्मा हृदय स्वास्थ्य प्रबंधन में एक प्रमुख विशेषज्ञ हैं।"
+                },
+                doctor2: {
+                    name: "डॉ. राहुल वर्मा",
+                    specialty: "पोषण विशेषज्ञ",
+                    bio: "डॉ वर्मा व्यक्तिगत जरूरतों और चिकित्सा स्थितियों के अनुरूप हृदय-स्वस्थ आहार योजना बनाने में माहिर हैं।"
+                },
+            }
+        };
+
+        // Hard-coded Logistic Regression model parameters
+        const model = {
+            coefficients: [-0.01633469116669926, -1.5658603613280235, 0.7712613098553256, -0.019777122144702175, -0.007694931388566914, 0.2227221873173775, 0.3524959132585293, 0.02102558693245455, -0.999120610300971, -0.803714243657922],
+            intercept: 2.083812702580796
+        };
+
+        // --- GLOBAL CONSTANTS FOR ANALYSIS ---
+        // Chart instances storage
+        let riskTrendChart = null;
+        let metricComparisonBarChart = null; 
+        
+        // Target/Average Values for Comparison
+        const POPULATION_RISK_BASELINE = 0.25; // 25% Baseline Risk
+        const HEALTHY_CHOL_TARGET = 200; // mg/dl (Target: < 200)
+        const HEALTHY_SYSTOLIC_BP_TARGET = 120; // mmHg (Target: < 120)
+        const HR_TARGET_PERCENT = 0.85; // Target heart rate zone is 85% of Max HR for age
+
+        // --- CORE LOGIC FUNCTIONS (Unchanged from previous iteration) ---
+
+        function sigmoid(x) {
+            return 1 / (1 + Math.exp(-x));
+        }
+
+        function calculateMaxHR(age) {
+            return 220 - age;
+        }
+
+        function predictHeartAttackRisk(vitalSigns) {
+            let linearCombination = model.intercept;
+            const contributions = [];
+
+            for (let i = 0; i < vitalSigns.length; i++) {
+                const contribution = model.coefficients[i] * vitalSigns[i];
+                linearCombination += contribution;
+                contributions.push({ index: i, contribution: contribution });
+            }
+            
+            return {
+                probability: sigmoid(linearCombination),
+                contributions: contributions
+            };
+        }
+
+        function getRiskExplanation(contributions, lang) {
+            const strings = translations[lang];
+            const featureNames = strings.featureNames;
+            
+            contributions.sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution));
+            
+            const increasingRisk = contributions
+                .filter(c => c.contribution > 0.05)
+                .slice(0, 3);
+
+            const decreasingRisk = contributions
+                .filter(c => c.contribution < -0.05)
+                .slice(0, 3);
+            
+            const increasedList = document.getElementById('xai-increased-list');
+            const decreasedList = document.getElementById('xai-decreased-list');
+            const noFactorsMessage = document.getElementById('xai-no-factors');
+
+            increasedList.innerHTML = '';
+            decreasedList.innerHTML = '';
+            
+            if (increasingRisk.length > 0) {
+                document.getElementById('xai-increased-label').textContent = strings.xaiRiskIncreased;
+                increasingRisk.forEach(c => {
+                    const li = document.createElement('li');
+                    li.textContent = `${featureNames[c.index]}`;
+                    increasedList.appendChild(li);
+                });
+            } else {
+                document.getElementById('xai-increased-label').textContent = '';
+            }
+
+            if (decreasingRisk.length > 0) {
+                 document.getElementById('xai-decreased-label').textContent = strings.xaiRiskDecreased;
+                 decreasingRisk.forEach(c => {
+                    const li = document.createElement('li');
+                    li.textContent = `${featureNames[c.index]}`;
+                    decreasedList.appendChild(li);
+                });
+            } else {
+                document.getElementById('xai-decreased-label').textContent = '';
+            }
+            
+            if (increasingRisk.length === 0 && decreasingRisk.length === 0) {
+                noFactorsMessage.textContent = strings.xaiNoMajorFactors;
+                document.getElementById('xai-explanation').classList.add('hidden');
+            } else {
+                noFactorsMessage.textContent = '';
+                document.getElementById('xai-explanation').classList.remove('hidden');
+            }
+
+            document.getElementById('xai-heading').textContent = strings.xaiHeading;
+            document.getElementById('xai-intro').textContent = strings.xaiIntro;
+        }
+
+        // --- DASHBOARD RENDERING LOGIC ---
+
+        function renderHealthAnalysisTab() {
+            const patientId = getCurrentPatientId();
+            if (!patientId) {
+                // Handle case where org has no patients yet
+                if (riskTrendChart) riskTrendChart.destroy();
+                if (metricComparisonBarChart) metricComparisonBarChart.destroy();
+                document.getElementById('overall-summary-card').innerHTML = `<p class="text-xl font-semibold text-gray-400 text-center">Please add or select a patient to view their analysis.</p>`;
+                document.getElementById('detailed-analysis-grid').innerHTML = '';
+                 document.getElementById('chart-risk-title').parentElement.parentElement.classList.add('hidden');
+                return;
+            }
+            
+            document.getElementById('chart-risk-title').parentElement.parentElement.classList.remove('hidden');
+
+            let history = JSON.parse(localStorage.getItem(`riskHistory_${patientId}`)) || [];
+            
+            const lang = document.getElementById('language-select').value;
+            const strings = translations[lang];
+            
+            document.getElementById('analysis-heading').textContent = strings.analysisHeading;
+            document.getElementById('analysis-intro').textContent = strings.analysisIntro;
+            document.getElementById('clear-history-button').textContent = strings.clearHistoryButton;
+            document.getElementById('summary-title').textContent = strings.summaryTitle;
+            document.getElementById('metrics-analysis-title').textContent = strings.metricsAnalysisTitle;
+            document.getElementById('chart-comparison-title').textContent = strings.chartComparisonTitle;
+
+
+            if (history.length === 0) {
+                // Clear any existing charts/content
+                if (riskTrendChart) riskTrendChart.destroy();
+                if (metricComparisonBarChart) metricComparisonBarChart.destroy();
+                
+                document.getElementById('overall-summary-card').innerHTML = `<p class="text-xl font-semibold text-gray-400 text-center">${strings.analysisNoData}</p>`;
+                document.getElementById('detailed-analysis-grid').innerHTML = '';
+                 document.getElementById('chart-risk-title').parentElement.parentElement.classList.add('hidden');
+
+                return;
+            }
+
+            // Ensure charts are visible
+             document.getElementById('chart-risk-title').parentElement.parentElement.classList.remove('hidden');
+
+
+            // 1. Generate and display OVERALL SUMMARY CARD
+            const summaryHtml = generateOverallSummary(history, lang);
+            document.getElementById('summary-content').innerHTML = summaryHtml;
+
+            // 2. Generate and display DETAILED METRIC ANALYSIS
+            const latestData = history[history.length - 1].data;
+            const detailedHtml = generateDetailedMetricAnalysis(latestData, lang);
+            document.getElementById('detailed-analysis-grid').innerHTML = detailedHtml;
+
+            // 3. Render Bar Chart Comparison and Risk Trend
+            renderMetricComparisonBarChart(latestData, lang);
+            renderRiskTrendChart(history, lang);
+        }
+
+        function generateOverallSummary(history, lang) {
+            const strings = translations[lang];
+            const riskScores = history.map(item => item.score);
+            const latestScore = riskScores[riskScores.length - 1];
+            
+            // Calculate Average Risk
+            const avgRisk = riskScores.reduce((a, b) => a + b, 0) / riskScores.length;
+            const avgRiskPercent = (avgRisk * 100).toFixed(1);
+            
+            // Determine Trend (comparing first score to last score)
+            let riskTrend = strings.trendInsufficient;
+            let trendIcon = '<path stroke-linecap="round" stroke-linejoin="round" d="M12 6.75a5.25 5.25 0 00-5.25 5.25 5.25 5.25 0 0010.5 0 5.25 5.25 0 00-5.25-5.25z" />'; // Circle dot (Stable)
+            let trendColor = 'text-blue-400';
+            
+            if (riskScores.length >= 2) {
+                const firstScore = riskScores[0];
+                const trendChange = latestScore - firstScore;
+                
+                if (trendChange > 0.02) { // Increased by more than 2%
+                    riskTrend = strings.trendIncreasing;
+                    trendIcon = '<path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18L9 11.25l4.305 4.305a1.125 1.125 0 001.995 0l3.078-3.078 2.053 2.053A2.25 2.25 0 0021.75 16.5V6.75a.75.75 0 00-.75-.75h-10.5a.75.75 0 00-.75.75v3.75a.75.75 0 00.75.75h3.75a.75.75 0 00.53-.22L12 10.5z" />'; // Trend up
+                    trendColor = 'text-red-400';
+                } else if (trendChange < -0.02) { // Decreased by more than 2%
+                    riskTrend = strings.trendDecreasing;
+                    trendIcon = '<path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6L9 12.75l4.305-4.305a1.125 1.125 0 011.995 0l3.078 3.078 2.053-2.053a2.25 2.25 0 000-3.182V12.75a.75.75 0 00.75.75h3.75a.75.75 0 00.75-.75V6.75a.75.75 0 00-.75-.75h-10.5a.75.75 0 00-.75.75v3.75a.75.75 0 00.75.75h3.75a.75.75 0 00.53-.22L12 10.5z" />'; // Trend down
+                    trendColor = 'text-green-400';
+                } else {
+                    riskTrend = strings.trendStable;
+                    trendColor = 'text-blue-400';
+                }
+            }
+
+            // Comparison with Population
+            const avgComparison = avgRisk - POPULATION_RISK_BASELINE;
+            let comparisonText = '';
+            let comparisonColor = '';
+            if (avgComparison > 0.05) {
+                comparisonText = `+${(avgComparison * 100).toFixed(1)}% Higher`;
+                comparisonColor = 'text-red-400';
+            } else if (avgComparison < -0.05) {
+                comparisonText = `${(avgComparison * 100).toFixed(1)}% Lower`;
+                comparisonColor = 'text-green-400';
+            } else {
+                comparisonText = 'Similar to Average';
+                comparisonColor = 'text-blue-400';
+            }
+            
+            const card = (title, value, colorClass, iconPath) => `
+                <div class="p-4 bg-gray-700 rounded-lg shadow-inner">
+                    <div class="flex items-center justify-center mb-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7 mr-2 ${colorClass}">
+                            ${iconPath}
+                        </svg>
+                        <p class="text-sm font-semibold text-gray-300">${title}</p>
+                    </div>
+                    <p class="text-3xl font-bold ${colorClass}">${value}</p>
+                </div>
+            `;
+            
+            let html = '';
+            
+            // Card 1: Average Risk Score
+            html += card(strings.riskScoreLabel, `${avgRiskPercent}%`, 'text-teal-400', '<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9" /><path stroke-linecap="round" stroke-linejoin="round" d="M12 10.5v8.25m-4.5-8.25h9" />');
+
+            // Card 2: Risk Trend
+            html += card('Risk Trend', riskTrend, trendColor, trendIcon);
+            
+            // Card 3: Comparison
+            html += card('vs. Population Avg (25%)', comparisonText, comparisonColor, '<path stroke-linecap="round" stroke-linejoin="round" d="M15 19.12c1.7 0 3.3-.7 4.5-1.9M15 19.12l-1.4-1.4M15 19.12l-1.4-1.4M15 19.12l-1.4-1.4M15 19.12l-1.4-1.4M15 19.12l-1.4-1.4M15 19.12l-1.4-1.4" /><path stroke-linecap="round" stroke-linejoin="round" d="M12 21.75a9.75 9.75 0 009.75-9.75V8.25a4.5 4.5 0 00-4.5-4.5h-1.373a.75.75 0 00-.53-.22H7.253a.75.75 0 00-.53.22H5.25a4.5 4.5 0 00-4.5 4.5v3.75a9.75 9.75 0 009.75 9.75z" />');
+
+            return html;
+        }
+
+        function generateDetailedMetricAnalysis(data, lang) {
+            const strings = translations[lang];
+            
+            const createMetricCard = (title, value, status, advice, colorClass) => `
+                <div class="p-4 bg-gray-700 rounded-xl shadow-lg border-l-4 ${colorClass.replace('text-', 'border-')}">
+                    <p class="text-sm font-semibold text-gray-300 mb-1">${title}</p>
+                    <p class="text-2xl font-bold ${colorClass}">${value}</p>
+                    <p class="text-sm font-bold mt-2 ${colorClass}">${status}</p>
+                    <p class="text-xs text-gray-400 mt-1">${advice}</p>
+                </div>
+            `;
+            
+            let html = '';
+
+            // --- 1. Cholesterol Analysis (chol) ---
+            let cholStatus, cholAdvice, cholColor;
+            const latestChol = data.chol;
+            if (latestChol >= 240) {
+                cholStatus = strings.statusHighRisk;
+                cholAdvice = strings.analysisCholHighRisk;
+                cholColor = "text-red-400";
+            } else if (latestChol >= 200) {
+                cholStatus = strings.statusElevated;
+                cholAdvice = strings.analysisCholElevated;
+                cholColor = "text-yellow-400";
+            } else {
+                cholStatus = strings.statusOptimal;
+                cholAdvice = strings.analysisCholOptimal;
+                cholColor = "text-green-400";
+            }
+            html += createMetricCard(strings.labelChol, `${latestChol} mg/dl`, cholStatus, cholAdvice, cholColor);
+
+            // --- 2. Resting Systolic BP Analysis (trtbps) ---
+            let bpStatus, bpAdvice, bpColor;
+            const latestBP = data.trtbps;
+            if (latestBP >= 140) {
+                bpStatus = strings.statusHighRisk;
+                bpAdvice = strings.analysisBPHighRisk;
+                bpColor = "text-red-400";
+            } else if (latestBP >= 120) {
+                bpStatus = strings.statusElevated;
+                bpAdvice = strings.analysisBPElevated;
+                bpColor = "text-yellow-400";
+            } else {
+                bpStatus = strings.statusOptimal;
+                bpAdvice = strings.analysisBPOptimal;
+                bpColor = "text-green-400";
+            }
+            html += createMetricCard(strings.labelTrtbps, `${latestBP} mmHg`, bpStatus, bpAdvice, bpColor);
+            
+            // --- 3. Fasting Blood Sugar Analysis (fbs) ---
+            let fbsStatus, fbsAdvice, fbsColor;
+            const latestFbs = data.fbs; // 1 means > 120 mg/dl (High)
+            if (latestFbs === 1) {
+                fbsStatus = strings.statusHighRisk;
+                fbsAdvice = strings.analysisFbsHigh;
+                fbsColor = "text-red-400";
+            } else {
+                fbsStatus = strings.statusOptimal;
+                fbsAdvice = strings.analysisFbsNormal;
+                fbsColor = "text-green-400";
+            }
+            html += createMetricCard(strings.labelFbs, latestFbs === 1 ? strings.fbsYes : strings.fbsNo, fbsStatus, fbsAdvice, fbsColor);
+
+            // --- 4. Resting ECG Analysis (restecg) ---
+            let ecgStatus, ecgAdvice, ecgColor;
+            const latestEcg = data.restecg; // 0=Normal, 1/2=Abnormal
+            const ecgValueText = document.getElementById(`restecg-option-${latestEcg}`).textContent;
+
+            if (latestEcg === 0) {
+                ecgStatus = strings.statusOptimal;
+                ecgAdvice = strings.analysisRestecgNormal;
+                ecgColor = "text-green-400";
+            } else {
+                ecgStatus = strings.statusHighRisk;
+                ecgAdvice = strings.analysisRestecgAbnormal;
+                ecgColor = "text-red-400";
+            }
+            html += createMetricCard(strings.labelRestecg, ecgValueText, ecgStatus, ecgAdvice, ecgColor);
+
+            return html;
+        }
+
+        function renderMetricComparisonBarChart(latestData, lang) {
+            const strings = translations[lang];
+            const maxHRTarget = calculateMaxHR(latestData.age) * HR_TARGET_PERCENT;
+
+            const comparisonData = {
+                labels: [strings.barCholesterol, strings.barRestingBP, strings.barMaxHR],
+                datasets: [
+                    {
+                        label: 'Your Latest Value',
+                        data: [latestData.chol, latestData.trtbps, latestData.thalachh],
+                        backgroundColor: 'rgba(45, 212, 191, 0.8)', // Teal
+                        borderColor: 'rgb(45, 212, 191)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Target/Healthy Value',
+                        data: [HEALTHY_CHOL_TARGET, HEALTHY_SYSTOLIC_BP_TARGET, maxHRTarget],
+                        backgroundColor: 'rgba(255, 99, 132, 0.8)', // Reddish
+                        borderColor: 'rgb(255, 99, 132)',
+                        borderWidth: 1
+                    }
+                ]
+            };
+
+            const baseOptions = {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { labels: { color: '#fff', font: { size: 14 } } },
+                    tooltip: { mode: 'index', intersect: false }
+                },
+                scales: {
+                    y: { 
+                        beginAtZero: true, 
+                        ticks: { color: '#fff' }, 
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' } 
+                    },
+                    x: { 
+                        ticks: { color: '#fff' }, 
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' } 
+                    }
+                }
+            };
+            
+            const ctx = document.getElementById('metricComparisonBarChart').getContext('2d');
+            if (metricComparisonBarChart) metricComparisonBarChart.destroy();
+
+            metricComparisonBarChart = new Chart(ctx, {
+                type: 'bar',
+                data: comparisonData,
+                options: { ...baseOptions, indexAxis: 'y' }
+            });
+        }
+        
+        function renderRiskTrendChart(history, lang) {
+            const strings = translations[lang];
+            const riskLabels = history.map(item => new Date(item.date).toLocaleDateString(lang));
+
+            function renderChart(canvasId, type, data, scales, existingChart = null) {
+                const baseOptions = {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { labels: { color: '#fff', font: { size: 14 } } },
+                        tooltip: { mode: 'index', intersect: false }
+                    },
+                    scales: {
+                        y: { ticks: { color: '#fff' }, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
+                        x: { ticks: { color: '#fff', maxTicksLimit: 7 }, grid: { color: 'rgba(255, 255, 255, 0.1)' } }
+                    }
+                };
+
+                const ctx = document.getElementById(canvasId).getContext('2d');
+                if (existingChart) existingChart.destroy();
+                return new Chart(ctx, { type, data, options: { ...baseOptions, scales: { ...baseOptions.scales, ...scales } } });
+            }
+
+            const riskData = history.map(item => (item.score * 100).toFixed(2));
+            const riskAvg = history.map(() => POPULATION_RISK_BASELINE * 100);
+            const riskChartData = {
+                labels: riskLabels,
+                datasets: [
+                    {
+                        label: strings.riskScoreLabel, data: riskData,
+                        borderColor: 'rgb(45, 212, 191)', backgroundColor: 'rgba(45, 212, 191, 0.2)',
+                        fill: false, tension: 0.2, pointRadius: 4
+                    },
+                    {
+                        label: strings.avgLabel, data: riskAvg,
+                        borderColor: 'rgb(255, 99, 132)', backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        borderDash: [5, 5], pointRadius: 0, tension: 0, fill: false
+                    }
+                ]
+            };
+            document.getElementById('chart-risk-title').textContent = strings.chartRiskTitle;
+            riskTrendChart = renderChart('riskTrendChart', 'line', riskChartData, { y: { min: 0, max: 100, ticks: { callback: v => v + '%' } } }, riskTrendChart);
+        }
+
+        // --- GEMINI API CHAT ASSISTANT FUNCTIONS ---
+
+        async function getGeminiResponse(query, lang) {
+            const systemInstruction = getSystemInstruction(lang);
+            const payload = {
+                contents: [{ parts: [{ text: query }] }],
+                tools: [{ "google_search": {} }],
+                systemInstruction: { parts: [{ text: systemInstruction }] },
+            };
+
+            let response = null;
+            for (let i = 0; i < MAX_RETRIES; i++) {
+                try {
+                    const delay = Math.pow(2, i) * 1000;
+                    if (i > 0) await new Promise(resolve => setTimeout(resolve, delay));
+
+                    const apiResponse = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (apiResponse.ok) {
+                        response = await apiResponse.json();
+                        break;
+                    } else if (apiResponse.status === 429) {
+                        console.warn(`Attempt ${i + 1} failed (Rate Limit 429). Retrying in ${delay / 1000}s.`);
+                        continue;
+                    } else {
+                        throw new Error(`API call failed with status ${apiResponse.status}`);
+                    }
+                } catch (error) {
+                    if (i === MAX_RETRIES - 1) throw new Error("Max retries reached.");
+                }
+            }
+
+            const candidate = response.candidates?.[0];
+            const text = candidate?.content?.parts?.[0]?.text || "I am currently unable to process your request.";
+            
+            let sources = [];
+            const groundingMetadata = candidate?.groundingMetadata;
+            if (groundingMetadata && groundingMetadata.groundingAttributions) {
+                sources = groundingMetadata.groundingAttributions
+                    .map(attr => ({ uri: attr.web?.uri, title: attr.web?.title }))
+                    .filter(src => src.uri && src.title);
+            }
+            
+            let formattedText = text;
+            if (sources.length > 0) {
+                const uniqueSources = Array.from(new Set(sources.map(s => s.uri)))
+                    .map(uri => sources.find(s => s.uri === uri));
+
+                formattedText += '<br><br><span class="text-xs text-gray-400">Sources: ';
+                uniqueSources.forEach((source, index) => {
+                    const displayTitle = source.title.substring(0, 30) + '...';
+                    formattedText += `[${index + 1}] <a href="${source.uri}" target="_blank" class="text-teal-400 hover:underline">${displayTitle}</a>; `;
+                });
+                formattedText = formattedText.slice(0, -2) + '</span>';
+            }
+            return formattedText;
+        }
+
+        function appendMessage(text, sender) {
+            const container = document.getElementById('chat-container');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message ${sender}-message`;
+            const bubbleDiv = document.createElement('div');
+            bubbleDiv.className = `${sender}-bubble`;
+            bubbleDiv.innerHTML = text; 
+            messageDiv.appendChild(bubbleDiv);
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        async function sendQuery() {
+            const inputField = document.getElementById('chat-input');
+            const query = inputField.value.trim();
+            const lang = document.getElementById('language-select').value;
+            const strings = translations[lang];
+
+            if (query === '') return;
+
+            appendMessage(query, 'user');
+            inputField.value = '';
+
+            const sendButton = document.getElementById('send-button');
+            const loadingSpinner = document.getElementById('loading-spinner');
+            const sendIcon = document.getElementById('send-icon');
+            
+            sendButton.disabled = true;
+            sendIcon.classList.add('hidden');
+            loadingSpinner.classList.remove('hidden');
+
+            try {
+                const responseText = await getGeminiResponse(query, lang);
+                appendMessage(responseText, 'assistant');
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                appendMessage(strings.assistantApiError, 'assistant');
+            } finally {
+                sendButton.disabled = false;
+                loadingSpinner.classList.add('hidden');
+                sendIcon.classList.remove('hidden');
+            }
+        }
+
+        function startChatAssistant() {
+            const chatContainer = document.getElementById('chat-container');
+            if (chatContainer.children.length === 0) {
+                const lang = document.getElementById('language-select').value;
+                const strings = translations[lang];
+                appendMessage(strings.assistantGreeting, 'assistant');
+            }
+        }
+        
+        // --- DOCTORS TAB LOGIC ---
+        function renderDoctorsTab(lang) {
+            const strings = translations[lang];
+            const doctorsListContainer = document.getElementById('doctors-list');
+            doctorsListContainer.innerHTML = ''; // Clear previous entries
+
+            const doctorsData = [
+                { id: 1, available: true, img: 'https://placehold.co/100x100/2DD4BF/1F2937?text=AS' },
+                { id: 2, available: false, img: 'https://placehold.co/100x100/EF4444/1F2937?text=RV' }
+            ];
+
+            doctorsData.forEach(doc => {
+                const doctorInfo = strings[`doctor${doc.id}`];
+                const availabilityClass = doc.available ? 'doctor-status-available' : 'doctor-status-unavailable';
+                const availabilityText = doc.available ? strings.statusAvailable : strings.statusUnavailable;
+
+                const cardHTML = `
+                    <div class="doctor-card rounded-xl p-6 flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-6">
+                        <img src="${doc.img}" alt="Dr. ${doctorInfo.name}" class="w-24 h-24 rounded-full border-4 border-teal-400 object-cover flex-shrink-0">
+                        <div class="flex-grow">
+                            <div class="flex items-center justify-center sm:justify-start gap-4 mb-2">
+                                <h3 class="text-xl font-bold text-white">${doctorInfo.name}</h3>
+                                <span class="text-xs font-semibold px-2 py-1 rounded-full ${availabilityClass}">${availabilityText}</span>
+                            </div>
+                            <p class="text-teal-300 font-semibold mb-3">${doctorInfo.specialty}</p>
+                            <p class="text-gray-400 text-sm mb-4">${doctorInfo.bio}</p>
+                            <div class="flex flex-col sm:flex-row gap-3 justify-center sm:justify-start">
+                                <button class="bg-teal-500 hover:bg-teal-600 text-gray-900 font-bold py-2 px-4 rounded-lg transition-colors duration-300">${strings.bookAppointment}</button>
+                                <button class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">${strings.sendMessage}</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                doctorsListContainer.innerHTML += cardHTML;
+            });
+        }
+
+        // --- UTILITY AND EVENT HANDLERS ---
+        
+        function hideAllTabs() {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.add('hidden');
+            });
+        }
+
+        function setActiveTab(tabId) {
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(`tab-${tabId}`).classList.add('active');
+            hideAllTabs();
+            document.getElementById(`content-${tabId}`).classList.remove('hidden');
+            
+            const lang = document.getElementById('language-select').value;
+            if (tabId === 'health-analysis') renderHealthAnalysisTab();
+            if (tabId === 'assistant') startChatAssistant();
+            if (tabId === 'doctors') {
+                // The initMap function is now called when the tab is clicked, if not already initialized.
+                if (typeof google !== 'undefined' && google.maps && !isMapInitialized) {
+                    initMap();
+                    isMapInitialized = true;
+                }
+                renderDoctorsTab(lang);
+            }
+        }
+
+        function savePrediction(score, vitalSigns) {
+            const patientId = getCurrentPatientId();
+            if (!patientId) {
+                console.error("Cannot save prediction, no patient selected.");
+                return;
+            }
+            let history = JSON.parse(localStorage.getItem(`riskHistory_${patientId}`)) || [];
+            
+            const data = {
+                age: vitalSigns[0], sex: vitalSigns[1], cp: vitalSigns[2], trtbps: vitalSigns[3], 
+                chol: vitalSigns[4], fbs: vitalSigns[5], restecg: vitalSigns[6], thalachh: vitalSigns[7], 
+                exng: vitalSigns[8], caa: vitalSigns[9]
+            };
+            
+            history.push({ 
+                date: new Date().toISOString(), 
+                score: score,
+                data: data
+            });
+            localStorage.setItem(`riskHistory_${patientId}`, JSON.stringify(history));
+        }
+
+        function clearHistory() {
+            const patientId = getCurrentPatientId();
+             if (!patientId) {
+                console.warn("No patient selected to clear history for.");
+                return;
+            }
+            // Since confirm() is not available, we proceed directly.
+            localStorage.removeItem(`riskHistory_${patientId}`);
+            if (riskTrendChart) riskTrendChart.destroy();
+            if (metricComparisonBarChart) metricComparisonBarChart.destroy();
+            renderHealthAnalysisTab();
+        }
+
+        function updateSuggestionsBasedOnRisk(lang, isHighRisk) {
+            const strings = translations[lang];
+            const suggestionsList = document.getElementById('suggestions-list');
+            const suggestions = isHighRisk ? strings.suggestionsHighRisk : strings.suggestionsLowRisk;
+            
+            suggestionsList.innerHTML = '';
+            
+            suggestions.forEach(suggestion => {
+                const li = document.createElement('li');
+                li.className = "text-gray-300";
+                li.textContent = suggestion;
+                suggestionsList.appendChild(li);
+            });
+        }
+        
+        // --- UI & INITIALIZATION FUNCTIONS ---
+        
+        function updateUI(lang) {
+            const strings = translations[lang];
+            document.getElementById('tab-predictor').textContent = strings.predictorTab;
+            document.getElementById('tab-health-analysis').textContent = strings.analysisTab;
+            document.getElementById('tab-suggestions').textContent = strings.suggestionsTab;
+            document.getElementById('tab-assistant').textContent = strings.assistantTab; 
+            document.getElementById('tab-doctors').textContent = strings.doctorsTab;
+            
+            document.getElementById('predictor-intro').textContent = strings.predictorIntro;
+            document.getElementById('label-age').textContent = strings.labelAge;
+            document.getElementById('label-sex').textContent = strings.labelSex;
+            document.getElementById('label-cp').textContent = strings.labelCp;
+            document.getElementById('label-trtbps').textContent = strings.labelTrtbps;
+            document.getElementById('label-chol').textContent = strings.labelChol;
+            document.getElementById('label-fbs').textContent = strings.labelFbs;
+            document.getElementById('label-restecg').textContent = strings.labelRestecg;
+            document.getElementById('label-thalachh').textContent = strings.labelThalachh;
+            document.getElementById('label-exng').textContent = strings.labelExng;
+            document.getElementById('label-caa').textContent = strings.labelCaa;
+            document.getElementById('predict-button').textContent = strings.predictButton;
+            document.getElementById('disclaimer-text').textContent = strings.disclaimerText;
+
+            document.getElementById('suggestions-heading').textContent = strings.suggestionsHeading;
+            document.getElementById('assistant-heading').textContent = strings.assistantHeading; 
+            document.getElementById('assistant-text').textContent = strings.assistantText; 
+
+            document.getElementById('analysis-heading').textContent = strings.analysisHeading;
+            document.getElementById('analysis-intro').textContent = strings.analysisIntro;
+            document.getElementById('summary-title').textContent = strings.summaryTitle;
+            document.getElementById('metrics-analysis-title').textContent = strings.metricsAnalysisTitle;
+            document.getElementById('clear-history-button').textContent = strings.clearHistoryButton;
+
+            document.getElementById('doctors-heading').textContent = strings.doctorsHeading;
+            document.getElementById('doctors-intro').textContent = strings.doctorsIntro;
+
+            document.getElementById('xai-heading').textContent = strings.xaiHeading;
+            document.getElementById('xai-intro').textContent = strings.xaiIntro;
+            
+            const activeTabContent = document.querySelector('.tab-content:not(.hidden)');
+            if (activeTabContent) {
+                const activeTabId = activeTabContent.id.replace('content-', '');
+                setActiveTab(activeTabId);
+            }
+        }
+
+        // Event listeners
+        document.getElementById('tab-predictor').addEventListener('click', () => setActiveTab('predictor'));
+        document.getElementById('tab-health-analysis').addEventListener('click', () => setActiveTab('health-analysis'));
+        document.getElementById('tab-suggestions').addEventListener('click', () => setActiveTab('suggestions'));
+        document.getElementById('tab-assistant').addEventListener('click', () => setActiveTab('assistant')); 
+        document.getElementById('tab-doctors').addEventListener('click', () => setActiveTab('doctors'));
+
+        document.getElementById('language-select').addEventListener('change', (event) => {
+            updateUI(event.target.value);
+            document.getElementById('result-box').classList.add('hidden');
+        });
+
+        document.getElementById('clear-history-button').addEventListener('click', clearHistory);
+
+        document.getElementById('predict-button').addEventListener('click', () => {
+             const patientId = getCurrentPatientId();
+             if (sessionStorage.getItem('userRole') === 'org' && !patientId) {
+                const errorMessage = document.getElementById('error-message');
+                errorMessage.textContent = "Please add or select a patient before making a prediction.";
+                errorMessage.classList.remove('hidden');
+                return;
+            }
+            
+            const vitalSigns = [
+                parseFloat(document.getElementById('age').value),
+                parseFloat(document.getElementById('sex').value),
+                parseFloat(document.getElementById('cp').value),
+                parseFloat(document.getElementById('trtbps').value),
+                parseFloat(document.getElementById('chol').value),
+                parseFloat(document.getElementById('fbs').value),
+                parseFloat(document.getElementById('restecg').value),
+                parseFloat(document.getElementById('thalachh').value),
+                parseFloat(document.getElementById('exng').value),
+                parseFloat(document.getElementById('caa').value)
+            ];
+
+            const resultBox = document.getElementById('result-box');
+            const errorMessage = document.getElementById('error-message');
+            const lang = document.getElementById('language-select').value;
+            const strings = translations[lang];
+
+            if (vitalSigns.some(isNaN)) {
+                errorMessage.textContent = "Please ensure all fields contain valid numerical data.";
+                errorMessage.classList.remove('hidden');
+                resultBox.classList.add('hidden');
+                return;
+            }
+            errorMessage.classList.add('hidden');
+
+            const prediction = predictHeartAttackRisk(vitalSigns);
+            const { probability, contributions } = prediction;
+            const percentage = (probability * 100).toFixed(2);
+            const isHighRisk = probability >= 0.5;
+
+            document.getElementById('result-heading').textContent = isHighRisk ? strings.resultHigh : strings.resultLow;
+            document.getElementById('result-text').textContent = `${strings.resultText} ${percentage}%`;
+            
+            resultBox.className = 'mt-8 p-6 rounded-xl text-center result-box';
+            resultBox.classList.add(isHighRisk ? 'bg-red-700' : 'bg-teal-700');
+            
+            savePrediction(probability, vitalSigns); 
+            updateSuggestionsBasedOnRisk(lang, isHighRisk);
+            getRiskExplanation(contributions, lang);
+
+            resultBox.classList.remove('hidden');
+            setTimeout(() => setActiveTab('health-analysis'), 700);
+        });
+
+        document.getElementById('send-button').addEventListener('click', sendQuery);
+        document.getElementById('chat-input').addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') sendQuery();
+        });
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            const loggedInUser = sessionStorage.getItem('loggedInUser');
+            const userRole = sessionStorage.getItem('userRole');
+            if (loggedInUser && userRole) {
+                showApp(loggedInUser, userRole);
+            } else {
+                showLogin();
+            }
+        });
+    </script>
+</body>
+</html>
