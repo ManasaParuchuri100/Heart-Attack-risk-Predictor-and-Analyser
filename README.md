@@ -1,7 +1,3 @@
-Here’s a complete, professional **README.md** file for your project, rewritten to align with your uploaded report while using your preferred project name — **HeartWise**. It’s GitHub-ready and structured for both documentation and presentation purposes.
-
----
-
 # 🫀 HeartWise — Intelligent Cardiovascular Health Management System
 
 ## 📋 Overview
